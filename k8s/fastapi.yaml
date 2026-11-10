@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastapi-deployment
+  labels:
+    app: fastapi  
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fastapi 
+  template:
+    metadata:
+      labels:
+        app: fastapi
+    spec:
+      initContainers:
+        - name: db-migrations
+          image: fastapi-app:latest
+          imagePullPolicy: Never
+          # Магия здесь: цикл while ждет, пока БД не ответит "ready". 
+          # Как только ответит, запускает миграции.
+          command: 
+            - sh
+            - -c
+            - |
+              echo "Waiting for database to be ready....."
+              until pg_isready -h postgres-service -U fca_user -d dev-fca; do
+                echo "Database is unavailable - sleeping"
+                sleep 2
+              done
+              echo "Database is ready! Running migrations..."
+              export PYTHONPATH=/install/lib/python3.10/site-packages
+              python -m alembic -x ENV=dev upgrade head
+          envFrom:
+            - configMapRef:
+                name: fastapi-config
+            - secretRef:
+                name: fastapi-secret
+
+      containers:
+        - name: fastapi-container
+          image: fastapi-app:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000  
+          
+          envFrom:
+            - configMapRef:
+                name: fastapi-config
+            - secretRef:
+                name: fastapi-secret
+
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: fastapi-service
+spec:
+  selector:
+    app: fastapi
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: ClusterIP

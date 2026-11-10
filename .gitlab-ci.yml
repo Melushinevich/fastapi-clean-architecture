@@ -1,0 +1,62 @@
+stages:
+  - lint
+  - build
+  - deploy
+
+
+# 1 Этап(lint):
+lint:
+  stage: lint
+  image: python:3.10-slim
+  script:
+    - echo "Устанавливаем линтер..."
+    - pip install flake8
+    - echo "Проверяем код на ошибки..."
+    - flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH != "main" #не в main 
+
+
+# 1 этап: сборка docker-image(build)
+# Запускается ТОЛЬКО при обновлении ветки main
+build_image:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind 
+  variables:
+    # Имя образа в реестре GitLab
+    IMAGE_NAME: $CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA
+  script:
+    - echo "Логинимся в GitLab Container Registry..."
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - echo "Собираем Docker-образ..."
+    - docker build -t $IMAGE_NAME .
+    - echo "Отправляем образ в реестр..."
+    - docker push $IMAGE_NAME
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main" # только ветка main
+
+
+# 3 этап: деплой в k8s(deploy)
+deploy_to_k8s:
+  stage: deploy
+  image: bitnami/kubectl:latest
+  script:
+    - echo "Настраиваем доступ к Kubernetes кластеру..."
+    - mkdir -p ~/.kube
+    - echo "$KUBECONFIG_FILE" | base64 -d > ~/.kube/config
+    
+    - echo "Обновляем образ в Deployment..."
+    - kubectl set image deployment/fastapi-deployment fastapi-container=$IMAGE_NAME -n default
+    
+    - echo "Применяем остальные манифесты (на случай, если они изменились)..."
+    - kubectl apply -f k8s/
+    
+    - echo "Ждем, пока поды обновятся..."
+    - kubectl rollout status deployment/fastapi-deployment -n default
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  dependencies:
+    - build_image
