@@ -14,13 +14,36 @@ spec:
       labels:
         app: fastapi
     spec:
+      initContainers:
+        - name: db-migrations
+          image: fastapi-app:latest
+          imagePullPolicy: Never
+          # Магия здесь: цикл while ждет, пока БД не ответит "ready". 
+          # Как только ответит, запускает миграции.
+          command: 
+            - sh
+            - -c
+            - |
+              echo "Waiting for database to be ready....."
+              until pg_isready -h postgres-service -U fca_user -d dev-fca; do
+                echo "Database is unavailable - sleeping"
+                sleep 2
+              done
+              echo "Database is ready! Running migrations..."
+              export PYTHONPATH=/install/lib/python3.10/site-packages
+              python -m alembic -x ENV=dev upgrade head
+          envFrom:
+            - configMapRef:
+                name: fastapi-config
+            - secretRef:
+                name: fastapi-secret
+
       containers:
         - name: fastapi-container
           image: fastapi-app:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 8000  
-          
           
           envFrom:
             - configMapRef:

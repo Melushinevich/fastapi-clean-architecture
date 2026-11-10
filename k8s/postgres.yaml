@@ -34,6 +34,30 @@ spec:
                 configMapKeyRef:
                   name: fastapi-config
                   key: DB_NAME
+            
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - fca_user
+                - -d
+                - dev-fca
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - fca_user
+                - -d
+                - dev-fca
+            initialDelaySeconds: 15
+            periodSeconds: 20    
+
+
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
