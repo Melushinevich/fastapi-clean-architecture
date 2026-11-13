@@ -1,10 +1,28 @@
-
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Service
 metadata:
-  name: postgres-deployment
+  name: postgres-service
+  labels:
+    app: postgres
 spec:
-  replicas: 1 
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    app: postgres
+spec:
+  serviceName: postgres-service
+  replicas: 1
   selector:
     matchLabels:
       app: postgres
@@ -15,10 +33,16 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: postgres:15 
+          image: postgres:15
           ports:
             - containerPort: 5432
+          
           env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: fastapi-config
+                  key: DB_NAME
             - name: POSTGRES_USER
               valueFrom:
                 configMapKeyRef:
@@ -29,51 +53,41 @@ spec:
                 secretKeyRef:
                   name: fastapi-secret
                   key: DB_PASSWORD
-            - name: POSTGRES_DB
-              valueFrom:
-                configMapKeyRef:
-                  name: fastapi-config
-                  key: DB_NAME
-            
+
           readinessProbe:
             exec:
               command:
                 - pg_isready
                 - -U
-                - fca_user
+                - $(POSTGRES_USER)
                 - -d
-                - dev-fca
+                - $(POSTGRES_DB)
             initialDelaySeconds: 5
             periodSeconds: 10
-          
+            timeoutSeconds: 5
+
           livenessProbe:
             exec:
               command:
                 - pg_isready
                 - -U
-                - fca_user
+                - $(POSTGRES_USER)
                 - -d
-                - dev-fca
+                - $(POSTGRES_DB)
             initialDelaySeconds: 15
-            periodSeconds: 20    
-
+            periodSeconds: 20
+            timeoutSeconds: 5
 
           volumeMounts:
-            - name: postgres-storage
+            - name: postgres-data
               mountPath: /var/lib/postgresql/data
-      volumes:
-        - name: postgres-storage
-          emptyDir: {} # временное хранилище для теста
+              subPath: postgres
 
----
-
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres-service
-spec:
-  selector:
-    app: postgres
-  ports:
-    - port: 5432
-      targetPort: 5432
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi

@@ -8,5 +8,5 @@ data:
   DB_HOST: "postgres-service"
   DB_PORT: "5432"
   DB_USER: "fca_user"
-  DB_NAME: "dev-fca"
+  DB_NAME: "dev-fca
   
