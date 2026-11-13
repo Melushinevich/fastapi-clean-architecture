@@ -7,7 +7,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # этап 1: проверка кода(lint)
+  # Этап 1: Проверка кода (lint)
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -28,7 +28,7 @@ jobs:
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-  # 2 этап: сборка docker-image(build)
+  # Этап 2: Сборка Docker-образа (build)
   build:
     needs: lint
     runs-on: ubuntu-latest
@@ -48,9 +48,8 @@ jobs:
         run: |
           docker images | grep fastapi-app
 
-  # 3 этап: деплой в k8s(deploy)
-  # этот этап упадет, так как GitHub Actions не имеет доступа к локальному Kind
-    deploy:
+  # Этап 3: Деплой в K8s (deploy)
+  deploy:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
@@ -65,12 +64,10 @@ jobs:
       
       - name: Install SOPS and Age
         run: |
-          # Скачиваем SOPS
           wget https://github.com/getsops/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64 -O sops
           chmod +x sops
           sudo mv sops /usr/local/bin/
           
-          # Скачиваем Age
           wget https://github.com/FiloSottile/age/releases/download/v1.1.1/age-v1.1.1-linux-amd64.tar.gz
           tar -xzf age-v1.1.1-linux-amd64.tar.gz
           sudo mv age/age* /usr/local/bin/
