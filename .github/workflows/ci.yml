@@ -50,7 +50,7 @@ jobs:
 
   # 3 этап: деплой в k8s(deploy)
   # этот этап упадет, так как GitHub Actions не имеет доступа к локальному Kind
-   deploy:
+    deploy:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
